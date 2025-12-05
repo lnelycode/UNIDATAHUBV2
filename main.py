@@ -1,12 +1,27 @@
 import asyncio
 import os
 from aiogram import Bot, Dispatcher
-from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types import Message, CallbackQuery
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 from aiogram.filters import CommandStart
 
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 if not BOT_TOKEN:
     raise ValueError("Токен бота не найден! Добавь BOT_TOKEN в секреты.")
+
+bot = Bot(token=BOT_TOKEN)
+dp = Dispatcher()
+
+
+def reply_main_menu() -> ReplyKeyboardMarkup:
+    kb = [
+        [KeyboardButton(text="🔎 Найти ВУЗ")],
+        [KeyboardButton(text="⚖️ Сравнить ВУЗы")],
+        [KeyboardButton(text="❓ О проекте")],
+    ]
+    return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
+
 
 UNIVERSITIES = [
     {
@@ -15,10 +30,10 @@ UNIVERSITIES = [
         "city": "Алматы",
         "specialties": ["IT", "Нефтегаз"],
         "min_score": 100,
-        "about": "Казахстанско-Британский технический университет — ведущий тех. вуз.",
+        "about": "КБТУ — ведущий технический вуз Казахстана.",
         "programs": "IT, Нефтегаз, Физика, Экономика, Менеджмент.",
-        "admission": "Мин. проходной балл: 100\nЕсть гранты, скидки, конкурсы.",
-        "international": "Партнёры: Великобритания, Турция, ЕС. Программы обмена.",
+        "admission": "Мин. балл: 100. Есть гранты.",
+        "international": "Обмен с Великобританией, Турцией и ЕС.",
         "tour": "https://example.com/kbtu-tour"
     },
     {
@@ -27,10 +42,10 @@ UNIVERSITIES = [
         "city": "Алматы",
         "specialties": ["IT", "Физика", "Биология"],
         "min_score": 95,
-        "about": "Национальный университет №1 в Казахстане.",
+        "about": "КазНУ — топовый государственный университет.",
         "programs": "80+ образовательных направлений.",
-        "admission": "Мин. проходной балл: 95\nГосударственные гранты.",
-        "international": "Партнёрства с Германией, Кореей, США.",
+        "admission": "Мин. балл: 95. Много госгрантов.",
+        "international": "Партнёры: Германия, США, Корея.",
         "tour": "https://example.com/kaznu-tour"
     },
     {
@@ -39,40 +54,68 @@ UNIVERSITIES = [
         "city": "Алматы",
         "specialties": ["IT", "Педагогика"],
         "min_score": 90,
-        "about": "Современный частный университет.",
+        "about": "СДУ — современный частный университет.",
         "programs": "IT, Педагогика, Гуманитарные направления.",
-        "admission": "Мин. проходной балл: 90\nСкидки до 50%.",
-        "international": "Партнёры: Турция и ЕС.",
+        "admission": "Мин. балл: 90. Есть скидки до 50%.",
+        "international": "Партнёрства с Турцией и странами ЕС.",
         "tour": "https://example.com/sdu-tour"
     }
 ]
 
 user_compare: dict[int, set[str]] = {}
 
-bot = Bot(token=BOT_TOKEN)
-dp = Dispatcher()
+
+@dp.message(CommandStart())
+async def start(message: Message) -> None:
+    await message.answer(
+        "Добро пожаловать в DataHub!\n\nВыберите действие:",
+        reply_markup=reply_main_menu()
+    )
 
 
-def main_menu_kb() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🔎 Найти ВУЗ", callback_data="find")],
-        [InlineKeyboardButton(text="⚖️ Сравнить ВУЗы", callback_data="compare")],
-        [InlineKeyboardButton(text="❓ О проекте", callback_data="about_project")]
+@dp.message(lambda m: m.text == "🔎 Найти ВУЗ")
+async def reply_find(message: Message) -> None:
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="Город: Алматы", callback_data="find_city:Алматы")],
+        [InlineKeyboardButton(text="Специальность: IT", callback_data="find_spec:IT")],
+        [InlineKeyboardButton(text="Мин. балл: 100+", callback_data="find_score:100")],
     ])
+    await message.answer("Выберите критерий поиска:", reply_markup=kb)
 
 
-def detail_kb(uid: str) -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🔙 Назад", callback_data=f"uni:{uid}")],
-        [InlineKeyboardButton(text="🏠 Главное меню", callback_data="main_menu")]
-    ])
+@dp.message(lambda m: m.text == "⚖️ Сравнить ВУЗы")
+async def reply_compare(message: Message) -> None:
+    user_id = message.from_user.id if message.from_user else 0
+    selected = user_compare.get(user_id)
+
+    if not selected:
+        await message.answer("⚠️ Пока ничего не выбрано.", reply_markup=reply_main_menu())
+        return
+
+    text = "⚖️ *Сравнение ВУЗов*\n\n"
+    for uid in selected:
+        uni = get_uni(uid)
+        if uni:
+            text += (
+                f"🔸 *{uni['name']}*\n"
+                f"Город: {uni['city']}\n"
+                f"Мин. балл: {uni['min_score']}\n"
+                f"Специальности: {', '.join(uni['specialties'])}\n\n"
+            )
+
+    await message.answer(text, parse_mode="Markdown", reply_markup=reply_main_menu())
 
 
-def get_uni(uid: str) -> dict | None:
-    return next((u for u in UNIVERSITIES if u["id"] == uid), None)
+@dp.message(lambda m: m.text == "❓ О проекте")
+async def reply_about(message: Message) -> None:
+    await message.answer(
+        "📘 *О проекте DataHub*\n\n"
+        "Каталог вузов Казахстана с поиском и сравнением.",
+        parse_mode="Markdown"
+    )
 
 
-def search_universities(city: str | None = None, spec: str | None = None, score: int | None = None) -> list[dict]:
+def search(city: str | None = None, spec: str | None = None, score: int | None = None) -> list[dict]:
     results = UNIVERSITIES
     if city:
         results = [u for u in results if u["city"] == city]
@@ -83,182 +126,151 @@ def search_universities(city: str | None = None, spec: str | None = None, score:
     return results
 
 
-@dp.message(CommandStart())
-async def start(message: Message) -> None:
-    await message.answer("Добро пожаловать в DataHub — каталог вузов Казахстана!", reply_markup=main_menu_kb())
+def get_uni(uid: str) -> dict | None:
+    return next((u for u in UNIVERSITIES if u["id"] == uid), None)
 
 
-@dp.callback_query(lambda c: c.data == "main_menu")
-async def cb_main_menu(callback: CallbackQuery) -> None:
-    if callback.message:
-        await callback.message.edit_text("Главное меню:", reply_markup=main_menu_kb())
-    await callback.answer()
-
-
-@dp.callback_query(lambda c: c.data == "about_project")
-async def about_project(callback: CallbackQuery) -> None:
-    kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🏠 Главное меню", callback_data="main_menu")]
+def uni_back(uid: str) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🔙 Назад", callback_data=f"uni:{uid}")]
     ])
-    if callback.message:
-        await callback.message.edit_text(
-            "📘 *О DataHub*\n\n"
-            "Это каталог вузов Казахстана с быстрым поиском, "
-            "детальным меню университетов и функцией сравнения.",
-            reply_markup=kb,
-            parse_mode="Markdown"
-        )
-    await callback.answer()
-
-
-@dp.callback_query(lambda c: c.data == "find")
-async def find(callback: CallbackQuery) -> None:
-    kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="Город: Алматы", callback_data="find_city:Алматы")],
-        [InlineKeyboardButton(text="Специальность: IT", callback_data="find_spec:IT")],
-        [InlineKeyboardButton(text="Мин. балл: 100+", callback_data="find_score:100")],
-        [InlineKeyboardButton(text="🏠 Главное меню", callback_data="main_menu")]
-    ])
-    if callback.message:
-        await callback.message.edit_text("Выберите критерий поиска:", reply_markup=kb)
-    await callback.answer()
-
-
-async def show_university_list(callback: CallbackQuery, unis: list[dict], title: str) -> None:
-    kb = []
-    if unis:
-        for u in unis:
-            kb.append([InlineKeyboardButton(text=u["name"], callback_data=f"uni:{u['id']}")])
-    else:
-        if callback.message:
-            await callback.message.edit_text(
-                title + "\n\nНичего не найдено.",
-                reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                    [InlineKeyboardButton(text="🔙 Назад", callback_data="find")],
-                    [InlineKeyboardButton(text="🏠 Главное меню", callback_data="main_menu")]
-                ])
-            )
-        return
-
-    kb.append([InlineKeyboardButton(text="🔙 Назад", callback_data="find")])
-    kb.append([InlineKeyboardButton(text="🏠 Главное меню", callback_data="main_menu")])
-
-    if callback.message:
-        await callback.message.edit_text(title, reply_markup=InlineKeyboardMarkup(inline_keyboard=kb))
 
 
 @dp.callback_query(lambda c: c.data and c.data.startswith("find_city:"))
 async def find_city(callback: CallbackQuery) -> None:
-    if callback.data:
+    if callback.data and callback.message:
         city = callback.data.split(":")[1]
-        await show_university_list(callback, search_universities(city=city), f"Вузы в городе {city}:")
+        unis = search(city=city)
+        if not unis:
+            await callback.message.edit_text(f"Вузы в городе {city}\n\n❗ Ничего не найдено.")
+        else:
+            kb = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text=u["name"], callback_data=f"uni:{u['id']}")]
+                for u in unis
+            ])
+            await callback.message.edit_text(f"Вузы в городе {city}\n\nВыберите университет:", reply_markup=kb)
     await callback.answer()
 
 
 @dp.callback_query(lambda c: c.data and c.data.startswith("find_spec:"))
 async def find_spec(callback: CallbackQuery) -> None:
-    if callback.data:
+    if callback.data and callback.message:
         spec = callback.data.split(":")[1]
-        await show_university_list(callback, search_universities(spec=spec), f"Вузы со специальностью {spec}:")
+        unis = search(spec=spec)
+        if not unis:
+            await callback.message.edit_text(f"Вузы по специальности {spec}\n\n❗ Ничего не найдено.")
+        else:
+            kb = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text=u["name"], callback_data=f"uni:{u['id']}")]
+                for u in unis
+            ])
+            await callback.message.edit_text(f"Вузы по специальности {spec}\n\nВыберите университет:", reply_markup=kb)
     await callback.answer()
 
 
 @dp.callback_query(lambda c: c.data and c.data.startswith("find_score:"))
 async def find_score(callback: CallbackQuery) -> None:
-    if callback.data:
+    if callback.data and callback.message:
         score = int(callback.data.split(":")[1])
-        await show_university_list(callback, search_universities(score=score), f"Вузы с проходным баллом от {score}:")
+        unis = search(score=score)
+        if not unis:
+            await callback.message.edit_text(f"Вузы с баллом от {score}\n\n❗ Ничего не найдено.")
+        else:
+            kb = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text=u["name"], callback_data=f"uni:{u['id']}")]
+                for u in unis
+            ])
+            await callback.message.edit_text(f"Вузы с баллом от {score}\n\nВыберите университет:", reply_markup=kb)
     await callback.answer()
 
 
 @dp.callback_query(lambda c: c.data and c.data.startswith("uni:"))
 async def uni_menu(callback: CallbackQuery) -> None:
-    if callback.data:
+    if callback.data and callback.message:
         uid = callback.data.split(":")[1]
         uni = get_uni(uid)
-        if uni and callback.message:
+        if uni:
             kb = InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="1️⃣ Об университете", callback_data=f"about:{uid}")],
                 [InlineKeyboardButton(text="2️⃣ Программы", callback_data=f"programs:{uid}")],
                 [InlineKeyboardButton(text="3️⃣ Приём и стипендии", callback_data=f"admission:{uid}")],
                 [InlineKeyboardButton(text="4️⃣ 3D Тур", callback_data=f"tour:{uid}")],
-                [InlineKeyboardButton(text="5️⃣ Междунар. сотрудничество", callback_data=f"intl:{uid}")],
-                [InlineKeyboardButton(text="➕ Добавить в сравнение", callback_data=f"add_compare:{uid}")],
-                [InlineKeyboardButton(text="🔙 Назад", callback_data="find")],
-                [InlineKeyboardButton(text="🏠 Главное меню", callback_data="main_menu")]
+                [InlineKeyboardButton(text="5️⃣ Международное сотрудничество", callback_data=f"intl:{uid}")],
+                [InlineKeyboardButton(text="➕ Добавить в сравнение", callback_data=f"add_compare:{uid}")]
             ])
             await callback.message.edit_text(
                 f"📘 *{uni['name']}*\nВыберите раздел:",
-                reply_markup=kb, parse_mode="Markdown"
+                reply_markup=kb,
+                parse_mode="Markdown"
             )
     await callback.answer()
 
 
 @dp.callback_query(lambda c: c.data and c.data.startswith("about:"))
 async def about(callback: CallbackQuery) -> None:
-    if callback.data:
+    if callback.data and callback.message:
         uid = callback.data.split(":")[1]
         uni = get_uni(uid)
-        if uni and callback.message:
+        if uni:
             await callback.message.edit_text(
-                f"🏛 *О университете*\n\n{uni['about']}",
+                f"🏛 *О вузе*\n\n{uni['about']}",
                 parse_mode="Markdown",
-                reply_markup=detail_kb(uid)
+                reply_markup=uni_back(uid)
             )
     await callback.answer()
 
 
 @dp.callback_query(lambda c: c.data and c.data.startswith("programs:"))
 async def programs(callback: CallbackQuery) -> None:
-    if callback.data:
+    if callback.data and callback.message:
         uid = callback.data.split(":")[1]
         uni = get_uni(uid)
-        if uni and callback.message:
+        if uni:
             await callback.message.edit_text(
                 f"🎓 *Программы*\n\n{uni['programs']}",
                 parse_mode="Markdown",
-                reply_markup=detail_kb(uid)
+                reply_markup=uni_back(uid)
             )
     await callback.answer()
 
 
 @dp.callback_query(lambda c: c.data and c.data.startswith("admission:"))
 async def admission(callback: CallbackQuery) -> None:
-    if callback.data:
+    if callback.data and callback.message:
         uid = callback.data.split(":")[1]
         uni = get_uni(uid)
-        if uni and callback.message:
+        if uni:
             await callback.message.edit_text(
                 f"📥 *Приём*\n\n{uni['admission']}",
                 parse_mode="Markdown",
-                reply_markup=detail_kb(uid)
+                reply_markup=uni_back(uid)
             )
     await callback.answer()
 
 
 @dp.callback_query(lambda c: c.data and c.data.startswith("tour:"))
 async def tour(callback: CallbackQuery) -> None:
-    if callback.data:
+    if callback.data and callback.message:
         uid = callback.data.split(":")[1]
         uni = get_uni(uid)
-        if uni and callback.message:
+        if uni:
             await callback.message.edit_text(
                 f"🧭 3D тур:\n{uni['tour']}",
-                reply_markup=detail_kb(uid)
+                reply_markup=uni_back(uid)
             )
     await callback.answer()
 
 
 @dp.callback_query(lambda c: c.data and c.data.startswith("intl:"))
 async def intl(callback: CallbackQuery) -> None:
-    if callback.data:
+    if callback.data and callback.message:
         uid = callback.data.split(":")[1]
         uni = get_uni(uid)
-        if uni and callback.message:
+        if uni:
             await callback.message.edit_text(
                 f"🌍 *Международное сотрудничество*\n\n{uni['international']}",
                 parse_mode="Markdown",
-                reply_markup=detail_kb(uid)
+                reply_markup=uni_back(uid)
             )
     await callback.answer()
 
@@ -266,55 +278,14 @@ async def intl(callback: CallbackQuery) -> None:
 @dp.callback_query(lambda c: c.data and c.data.startswith("add_compare:"))
 async def add_compare(callback: CallbackQuery) -> None:
     if callback.data:
-        uid = callback.data.split(":")[1]
         user_id = callback.from_user.id
+        uid = callback.data.split(":")[1]
         user_compare.setdefault(user_id, set()).add(uid)
-    await callback.answer("Добавлено в сравнение!", show_alert=False)
-
-
-@dp.callback_query(lambda c: c.data == "compare")
-async def compare(callback: CallbackQuery) -> None:
-    user_id = callback.from_user.id
-    selection = user_compare.get(user_id)
-
-    kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🗑 Очистить сравнение", callback_data="clear_compare")],
-        [InlineKeyboardButton(text="🏠 Главное меню", callback_data="main_menu")]
-    ])
-
-    if not selection:
-        if callback.message:
-            await callback.message.edit_text("⚠️ Вы пока ничего не выбрали для сравнения.", reply_markup=kb)
-        await callback.answer()
-        return
-
-    text = "⚖️ *Сравнение вузов*\n\n"
-    for uid in selection:
-        uni = get_uni(uid)
-        if uni:
-            text += (
-                f"🔸 *{uni['name']}*\n"
-                f"Город: {uni['city']}\n"
-                f"Мин. балл: {uni['min_score']}\n"
-                f"Направления: {', '.join(uni['specialties'])}\n\n"
-            )
-
-    if callback.message:
-        await callback.message.edit_text(text, parse_mode="Markdown", reply_markup=kb)
-    await callback.answer()
-
-
-@dp.callback_query(lambda c: c.data == "clear_compare")
-async def clear_compare(callback: CallbackQuery) -> None:
-    user_id = callback.from_user.id
-    user_compare[user_id] = set()
-    if callback.message:
-        await callback.message.edit_text("🗑 Сравнение очищено!", reply_markup=main_menu_kb())
-    await callback.answer()
+    await callback.answer("Добавлено!")
 
 
 async def main() -> None:
-    print("🚀 DataHub бот запущен!")
+    print("🚀 Бот запущен!")
     await dp.start_polling(bot)
 
 
