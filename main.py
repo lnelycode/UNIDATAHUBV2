@@ -1,70 +1,67 @@
 import asyncio
-import os
-import google.generativeai as genai
+import requests
 from aiogram import Bot, Dispatcher
 from aiogram.types import Message
 from aiogram.filters import CommandStart
 
-BOT_TOKEN = os.environ.get("BOT_TOKEN")
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+BOT_TOKEN = "ВСТАВЬ_ТУТ_СВОЙ_ТОКЕН"
 
-if not BOT_TOKEN:
-    raise ValueError("Токен бота не найден! Добавь BOT_TOKEN в секреты.")
-
-if not GEMINI_API_KEY:
-    raise ValueError("Gemini API ключ не найден! Добавь GEMINI_API_KEY в секреты.")
-
-genai.configure(api_key=GEMINI_API_KEY)
-model = genai.GenerativeModel("gemini-pro")
+# Бесплатная модель HuggingFace без API ключей
+HF_MODEL_URL = "https://api-inference.huggingface.co/models/HuggingFaceH4/zephyr-7b-beta"
 
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
 
 @dp.message(CommandStart())
-async def start(message: Message) -> None:
+async def start(message: Message):
     await message.answer(
-        "👋 Привет! Я AI-бот DataHub (Gemini).\n"
-        "Задавай любые вопросы о вузах Казахстана, ЕНТ, специальностях и т.д.\n\n"
-        "Например:\n"
-        "• Лучшие IT вузы в Казахстане?\n"
-        "• Сравни КБТУ и AITU\n"
-        "• Куда поступить с 75 баллами?\n"
-        "• Какие специальности есть в NU?\n"
+        "🤖 Привет! Я бесплатный ИИ-бот на HuggingFace.\n"
+        "Задай любой вопрос!"
     )
 
 
-async def ask_gemini(prompt: str) -> str:
-    try:
-        response = model.generate_content(
-            f"""
-Ты — эксперт по образованию, вузам Казахстана, ЕНТ, специальностям и поступлению.
-Отвечай структурировано, понятно, с фактами.
-Никогда не выдумывай ложные данные — используй общую информацию.
+def ask_hf(prompt: str) -> str:
+    """Отправка запроса на бесплатную HF модель"""
 
-Запрос пользователя:
-{prompt}
-"""
-        )
-        return response.text or ""
+    if prompt is None:
+        return "Пожалуйста, отправь текстовое сообщение."
+
+    payload = {
+        "inputs": prompt,
+        "parameters": {
+            "max_new_tokens": 200,
+            "temperature": 0.7
+        }
+    }
+
+    try:
+        response = requests.post(HF_MODEL_URL, json=payload)
+        data = response.json()
+
+        # Если модель "заснула" (HF подгружает её)
+        if "error" in data:
+            return "⚠️ Модель прогружается. Попробуй снова через 5 секунд."
+
+        # HF возвращает список вариантов
+        return data[0]["generated_text"]
+
     except Exception as e:
-        return f"⚠️ Ошибка Gemini: {e}"
+        return f"Ошибка HuggingFace: {e}"
 
 
 @dp.message()
-async def ai_answer(message: Message) -> None:
-    user_text = message.text
-    if not user_text:
-        return
+async def chat(message: Message):
+    text = message.text
 
-    await message.answer("⏳ Думаю...")
+    await message.answer("⏳ Генерирую ответ...")
 
-    reply = await ask_gemini(user_text)
+    reply = ask_hf(text)
     await message.answer(reply)
 
 
-async def main() -> None:
-    print("🚀 Gemini AI бот запущен!")
+async def main():
+    print("🚀 Бот запущен!")
     await dp.start_polling(bot)
 
 
