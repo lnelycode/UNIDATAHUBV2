@@ -1,73 +1,77 @@
 import asyncio
-import os
+import google.generativeai as genai
 from aiogram import Bot, Dispatcher
 from aiogram.types import Message
 from aiogram.filters import CommandStart
-from openai import OpenAI
 
-BOT_TOKEN = os.environ.get("BOT_TOKEN")
-OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
+# =============================
+# 👉 ВСТАВЬ ТУТ СВОИ КЛЮЧИ
+BOT_TOKEN = "8567318943:AAF44rNeeo5tdWY8ScdAnYrzfr5YAcFXMCs"
+GEMINI_API_KEY = ""
+# =============================
 
-if not BOT_TOKEN:
-    raise ValueError("Токен бота не найден! Добавь BOT_TOKEN в секреты.")
+# Проверка
+if BOT_TOKEN.startswith("ВСТАВЬ"):
+    raise RuntimeError("❌ Ты не указал BOT_TOKEN от BotFather.")
+if GEMINI_API_KEY.startswith("ВСТАВЬ"):
+    raise RuntimeError("❌ Ты не указал Gemini API Key.")
 
-if not OPENAI_API_KEY:
-    raise ValueError("OpenAI API ключ не найден! Добавь OPENAI_API_KEY в секреты.")
+# Настройка Gemini
+genai.configure(api_key=GEMINI_API_KEY)
+model = genai.GenerativeModel("gemini-pro")
 
-client = OpenAI(api_key=OPENAI_API_KEY)
-
+# Настройка Telegram
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
 
+# ---------- Команда /start ----------
 @dp.message(CommandStart())
-async def start(message: Message) -> None:
+async def start(message: Message):
     await message.answer(
-        "👋 Привет! Я AI-бот DataHub.\n"
-        "Задай мне любой вопрос о ВУЗах Казахстана.\n\n"
+        "👋 Привет! Я AI-бот DataHub (Gemini).\n"
+        "Задавай любые вопросы о вузах Казахстана, ЕНТ, специальностях и т.д.\n\n"
         "Например:\n"
-        "• Лучшие IT вузы в Астане?\n"
-        "• Сравни КБТУ и AITU.\n"
-        "• Где самый низкий проходной балл на экономику?"
+        "• Лучшие IT вузы в Казахстане?\n"
+        "• Сравни КБТУ и AITU\n"
+        "• Куда поступить с 75 баллами?\n"
+        "• Какие специальности есть в NU?\n"
     )
 
 
-def ask_gpt(prompt: str) -> str:
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[
-            {"role": "system", "content":
-                "Ты — эксперт по университетам Казахстана. "
-                "Отвечай структурировано, коротко, точными фактами. "
-                "Если информации нет — дай разумную оценку."
-            },
-            {"role": "user", "content": prompt}
-        ],
-        max_tokens=500
-    )
-    return response.choices[0].message.content or ""
+# ---------- Функция общения с Gemini ----------
+async def ask_gemini(prompt: str) -> str:
+    try:
+        response = model.generate_content(
+            f"""
+Ты — эксперт по образованию, вузам Казахстана, ЕНТ, специальностям и поступлению.
+Отвечай структурировано, понятно, с фактами.
+Никогда не выдумывай ложные данные — используй общую информацию.
+
+Запрос пользователя:
+{prompt}
+"""
+        )
+        return response.text
+
+    except Exception as e:
+        # Любую ошибку возвращаем в чат
+        return f"⚠️ Ошибка Gemini: {e}"
 
 
+# ---------- Основной обработчик всех сообщений ----------
 @dp.message()
-async def ai_answer(message: Message) -> None:
+async def ai_answer(message: Message):
     user_text = message.text
-    if not user_text:
-        return
-
     await message.answer("⏳ Думаю...")
 
-    try:
-        reply = ask_gpt(user_text)
-        await message.answer(reply)
-    except Exception as e:
-        await message.answer("⚠️ Ошибка при обращении к ИИ.")
-        print(e)
+    reply = await ask_gemini(user_text)
+    await message.answer(reply)
 
 
-async def main() -> None:
-    print("🚀 AI DataHub бот запущен!")
+# ---------- Запуск бота ----------
+async def main():
+    print("🚀 Gemini AI бот запущен!")
     await dp.start_polling(bot)
 
-
-if __name__ == "__main__":
-    asyncio.run(main())
+asyncio.run(main())
