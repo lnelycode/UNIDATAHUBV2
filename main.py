@@ -1,33 +1,28 @@
 import asyncio
+import os
 import google.generativeai as genai
 from aiogram import Bot, Dispatcher
 from aiogram.types import Message
 from aiogram.filters import CommandStart
 
-# =============================
-# 👉 ВСТАВЬ ТУТ СВОИ КЛЮЧИ
-BOT_TOKEN = "8567318943:AAF44rNeeo5tdWY8ScdAnYrzfr5YAcFXMCs"
-GEMINI_API_KEY = ""
-# =============================
+BOT_TOKEN = os.environ.get("BOT_TOKEN")
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 
-# Проверка
-if BOT_TOKEN.startswith("ВСТАВЬ"):
-    raise RuntimeError("❌ Ты не указал BOT_TOKEN от BotFather.")
-if GEMINI_API_KEY.startswith("ВСТАВЬ"):
-    raise RuntimeError("❌ Ты не указал Gemini API Key.")
+if not BOT_TOKEN:
+    raise ValueError("Токен бота не найден! Добавь BOT_TOKEN в секреты.")
 
-# Настройка Gemini
+if not GEMINI_API_KEY:
+    raise ValueError("Gemini API ключ не найден! Добавь GEMINI_API_KEY в секреты.")
+
 genai.configure(api_key=GEMINI_API_KEY)
 model = genai.GenerativeModel("gemini-pro")
 
-# Настройка Telegram
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
 
-# ---------- Команда /start ----------
 @dp.message(CommandStart())
-async def start(message: Message):
+async def start(message: Message) -> None:
     await message.answer(
         "👋 Привет! Я AI-бот DataHub (Gemini).\n"
         "Задавай любые вопросы о вузах Казахстана, ЕНТ, специальностях и т.д.\n\n"
@@ -39,7 +34,6 @@ async def start(message: Message):
     )
 
 
-# ---------- Функция общения с Gemini ----------
 async def ask_gemini(prompt: str) -> str:
     try:
         response = model.generate_content(
@@ -52,26 +46,27 @@ async def ask_gemini(prompt: str) -> str:
 {prompt}
 """
         )
-        return response.text
-
+        return response.text or ""
     except Exception as e:
-        # Любую ошибку возвращаем в чат
         return f"⚠️ Ошибка Gemini: {e}"
 
 
-# ---------- Основной обработчик всех сообщений ----------
 @dp.message()
-async def ai_answer(message: Message):
+async def ai_answer(message: Message) -> None:
     user_text = message.text
+    if not user_text:
+        return
+
     await message.answer("⏳ Думаю...")
 
     reply = await ask_gemini(user_text)
     await message.answer(reply)
 
 
-# ---------- Запуск бота ----------
-async def main():
+async def main() -> None:
     print("🚀 Gemini AI бот запущен!")
     await dp.start_polling(bot)
 
-asyncio.run(main())
+
+if __name__ == "__main__":
+    asyncio.run(main())
