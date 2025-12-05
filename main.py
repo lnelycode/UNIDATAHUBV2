@@ -32,9 +32,9 @@ async def start(message: Message) -> None:
     )
 
 
-async def ask_gpt(prompt: str) -> str:
+def ask_gpt(prompt: str) -> str:
     response = client.chat.completions.create(
-        model="gpt-3.5-turbo",
+        model="gpt-4o-mini",
         messages=[
             {"role": "system", "content":
                 "Ты — эксперт по университетам Казахстана. "
@@ -57,7 +57,7 @@ async def ai_answer(message: Message) -> None:
     await message.answer("⏳ Думаю...")
 
     try:
-        reply = await ask_gpt(user_text)
+        reply = ask_gpt(user_text)
         await message.answer(reply)
     except Exception as e:
         await message.answer("⚠️ Ошибка при обращении к ИИ.")
