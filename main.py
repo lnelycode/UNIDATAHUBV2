@@ -1,16 +1,13 @@
 import asyncio
+import os
 from aiogram import Bot, Dispatcher
 from aiogram.filters import CommandStart
 from aiogram.types import Message
 
-# =============================
-# 👉 ВСТАВЬ СВОЙ ТОКЕН СЮДА 👇
-BOT_TOKEN = "8567318943:AAF44rNeeo5tdWY8ScdAnYrzfr5YAcFXMCs"
-# =============================
+BOT_TOKEN = os.environ.get("BOT_TOKEN")
 
-# Проверка токена
-if BOT_TOKEN == "" or BOT_TOKEN == "8567318943:AAF44rNeeo5tdWY8ScdAnYrzfr5YAcFXMCs":
-    raise ValueError("❌ Ты забыл вставить токен бота!")
+if not BOT_TOKEN:
+    raise ValueError("❌ Токен бота не найден! Добавь BOT_TOKEN в секреты.")
 
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
