@@ -6,4 +6,5 @@ authors = ["Your Name <you@example.com>"]
 requires-python = ">=3.11"
 dependencies = [
     "aiogram>=3.22.0",
+    "openai>=2.9.0",
 ]
