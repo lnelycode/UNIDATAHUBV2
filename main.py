@@ -60,8 +60,8 @@ def load_from_sqlite():
     rows = cur.fetchall()
     conn.close()
 
-    universities = []
-    UNIS_BY_ID = {}
+    universities.clear()
+    UNIS_BY_ID.clear()
     city_set = set()
     spec_set = set()
 
@@ -130,6 +130,7 @@ def main_reply_keyboard() -> ReplyKeyboardMarkup:
             [KeyboardButton(text="Фильтры")],
             [KeyboardButton(text="⚖ Сравнение"), KeyboardButton(text="🎲 Случайный ВУЗ")],
             [KeyboardButton(text="🔢 Поиск по баллу"), KeyboardButton(text="Помощь")],
+            [KeyboardButton(text="Таблица ВУЗов Excel")],
         ],
     )
 
@@ -176,8 +177,8 @@ def apply_filters(filters: dict):
                 continue
             if ms >= score:
                 filtered.append(u)
+        filtered.sort(key=lambda x: int(x.get("MinScore") or 0), reverse=True)
         res = filtered
-        res.sort(key=lambda x: int(x.get("MinScore") or 0), reverse=True)
 
     return res
 
@@ -428,8 +429,18 @@ async def help_message(message: Message):
         "• Фильтры комбинируются: город + направление + минимальный балл.\n"
         "• «⚖ Сравнение» — показывает ВУЗы, добавленные через «➕ В сравнение».\n"
         "• «🎲 Случайный ВУЗ» — случайная рекомендация.\n"
-        "• «🔢 Поиск по баллу» — фильтр по минимальному баллу ЕНТ.\n\n"
+        "• «🔢 Поиск по баллу» — фильтр по минимальному баллу ЕНТ.\n"
+        "• «Таблица ВУЗов Excel» — ссылка на полную таблицу ВУЗов в Google Drive.\n\n"
         "Можно также писать название города, ВУЗа или направления (например, «Алматы», «НУ», «IT»).",
+        parse_mode="HTML",
+    )
+
+
+@dp.message(F.text == "Таблица ВУЗов Excel")
+async def excel_link(message: Message):
+    await message.answer(
+        "📊 Полная таблица ВУЗов Казахстана в формате Excel находится здесь:\n"
+        "https://drive.google.com/drive/folders/1fjZvILeJXRLSkiL2zhaz_fcngD7nKkoU",
         parse_mode="HTML",
     )
 
@@ -451,7 +462,7 @@ async def compare_button(message: Message):
     if not ids:
         await message.answer(
             "Список сравнения пуст.\n\n"
-            "В списке ВУЗов нажимай «➕ В сравнение» (в карточке вуза), чтобы добавить.",
+            "В списке ВУЗов нажимай «➕ В сравнение» в карточке ВУЗа, чтобы добавить.",
             parse_mode="HTML",
         )
         return
@@ -629,7 +640,7 @@ async def send_compare_view(chat_id: int, user_id: int):
     if not ids:
         text = (
             "Список сравнения пуст.\n\n"
-            "Добавь ВУЗы через кнопку «➕ В сравнение» в карточке вуза."
+            "Добавь ВУЗы через кнопку «➕ В сравнение» в карточке ВУЗа."
         )
         await bot.send_message(chat_id, text, reply_markup=main_inline_menu())
         return
