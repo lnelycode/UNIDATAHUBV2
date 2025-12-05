@@ -41,12 +41,13 @@ compare_list = {}    # user_id -> [ID, ID, ID]
 
 CITIES_PER_PAGE = 8
 SPECS_PER_PAGE = 8
-UNIS_PER_PAGE = 6
+UNIS_PER_PAGE = 4   # сколько вузов на странице списка
 
 
 # ================== РАБОТА С БАЗОЙ ==================
 
 def load_from_sqlite():
+    """Загружаем все вузы из SQLite в память."""
     global universities, UNIS_BY_ID, cities, specialties
 
     if not os.path.exists(DB_PATH):
@@ -106,7 +107,7 @@ load_from_sqlite()
 
 # ================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ==================
 
-def get_state(user_id):
+def get_state(user_id: int):
     st = user_state.get(user_id)
     if not st:
         st = {
@@ -122,7 +123,7 @@ def get_state(user_id):
     return st
 
 
-def main_reply_keyboard():
+def main_reply_keyboard() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
         resize_keyboard=True,
         keyboard=[
@@ -133,7 +134,7 @@ def main_reply_keyboard():
     )
 
 
-def main_inline_menu():
+def main_inline_menu() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [InlineKeyboardButton(text="📍 Города", callback_data="filter_cities")],
@@ -144,7 +145,8 @@ def main_inline_menu():
     )
 
 
-def apply_filters(filters):
+def apply_filters(filters: dict):
+    """Применяем фильтры к списку университетов."""
     res = universities
 
     city = filters.get("city")
@@ -180,7 +182,7 @@ def apply_filters(filters):
     return res
 
 
-def describe_filters(filters, total):
+def describe_filters(filters: dict, total: int) -> str:
     parts = []
 
     city = filters.get("city")
@@ -203,7 +205,7 @@ def describe_filters(filters, total):
     return title
 
 
-def format_uni_card_full(uni):
+def format_uni_card_full(uni: dict) -> str:
     name = uni.get("Name", "Без названия")
     city = uni.get("City", "Не указан")
     specs = uni.get("Specialties", "")
@@ -240,7 +242,7 @@ def format_uni_card_full(uni):
     return "\n".join(res)
 
 
-def format_uni_short_line(uni):
+def format_uni_short_line(uni: dict) -> str:
     name = uni.get("Name", "Без названия")
     city = uni.get("City", "Не указан")
     specs = uni.get("Specialties", "")
@@ -255,7 +257,7 @@ def format_uni_short_line(uni):
     return line
 
 
-def make_unis_list_text(unis_page, filters, page, total_pages, total_count):
+def make_unis_list_text(unis_page, filters, page: int, total_pages: int, total_count: int) -> str:
     header = describe_filters(filters, total_count)
     lines = [
         header,
@@ -269,22 +271,24 @@ def make_unis_list_text(unis_page, filters, page, total_pages, total_count):
     return "\n".join(lines)
 
 
-def make_unis_keyboard(unis_page, page, total_pages):
+def make_unis_keyboard(unis_page, page: int, total_pages: int) -> InlineKeyboardMarkup:
+    """Компактная клавиатура: одна кнопка = один вуз."""
     rows = []
 
     for u in unis_page:
         uid = (u.get("ID") or "").strip()
         if not uid:
             continue
-        open_btn = InlineKeyboardButton(
-            text="🔍 Открыть",
+
+        name = u.get("Name", "Без названия")
+        if len(name) > 40:
+            name = name[:37] + "..."
+
+        btn = InlineKeyboardButton(
+            text=f"🎓 {name}",
             callback_data=f"uni:{uid}",
         )
-        cmp_btn = InlineKeyboardButton(
-            text="➕ В сравнение",
-            callback_data=f"cmp_add:{uid}",
-        )
-        rows.append([open_btn, cmp_btn])
+        rows.append([btn])
 
     nav_row = []
     if page > 0:
@@ -300,12 +304,13 @@ def make_unis_keyboard(unis_page, page, total_pages):
             InlineKeyboardButton(text="🧹 Сбросить фильтры", callback_data="reset_filters"),
         ]
     )
+
     rows.append([InlineKeyboardButton(text="🏠 Меню", callback_data="menu")])
 
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def make_cities_keyboard(page):
+def make_cities_keyboard(page: int) -> InlineKeyboardMarkup:
     total_pages = max(1, ceil(len(cities) / CITIES_PER_PAGE))
     page = max(0, min(page, total_pages - 1))
     start = page * CITIES_PER_PAGE
@@ -330,7 +335,7 @@ def make_cities_keyboard(page):
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def make_specs_keyboard(page):
+def make_specs_keyboard(page: int) -> InlineKeyboardMarkup:
     total_pages = max(1, ceil(len(specialties) / SPECS_PER_PAGE))
     page = max(0, min(page, total_pages - 1))
     start = page * SPECS_PER_PAGE
@@ -355,7 +360,8 @@ def make_specs_keyboard(page):
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-async def send_unis_list(chat_id, user_id, page=None):
+async def send_unis_list(chat_id: int, user_id: int, page: int = None):
+    """Отправить список вузов с учётом фильтров и пагинации."""
     st = get_state(user_id)
     filters = st["filters"]
     if page is None:
@@ -445,7 +451,7 @@ async def compare_button(message: Message):
     if not ids:
         await message.answer(
             "Список сравнения пуст.\n\n"
-            "В списке ВУЗов нажимай «➕ В сравнение», чтобы добавить.",
+            "В списке ВУЗов нажимай «➕ В сравнение» (в карточке вуза), чтобы добавить.",
             parse_mode="HTML",
         )
         return
@@ -607,7 +613,7 @@ async def cb_uni_card(callback: CallbackQuery):
     await callback.message.answer(text, parse_mode="HTML", reply_markup=kb)
 
 
-def add_to_compare(user_id, uni_id):
+def add_to_compare(user_id: int, uni_id: str):
     ids = compare_list.get(user_id, [])
     if uni_id in ids:
         return ids
@@ -618,12 +624,12 @@ def add_to_compare(user_id, uni_id):
     return new_ids
 
 
-async def send_compare_view(chat_id, user_id):
+async def send_compare_view(chat_id: int, user_id: int):
     ids = compare_list.get(user_id, [])
     if not ids:
         text = (
             "Список сравнения пуст.\n\n"
-            "Добавь ВУЗы через кнопку «➕ В сравнение» в списке."
+            "Добавь ВУЗы через кнопку «➕ В сравнение» в карточке вуза."
         )
         await bot.send_message(chat_id, text, reply_markup=main_inline_menu())
         return
@@ -712,6 +718,7 @@ async def text_handler(message: Message):
     st = get_state(user_id)
     txt = (message.text or "").strip()
 
+    # Ввод балла
     if st.get("await_score"):
         try:
             score = int(txt)
@@ -726,6 +733,7 @@ async def text_handler(message: Message):
         await send_unis_list(message.chat.id, user_id, page=0)
         return
 
+    # Поиск по тексту
     q = txt.lower()
     results = []
     for u in universities:
