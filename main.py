@@ -284,6 +284,37 @@ def make_unis_list_text(unis_page, filters, page: int, total_pages: int, total_c
 
 
 def make_unis_keyboard(unis_page, page: int, total_pages: int) -> InlineKeyboardMarkup:
+    """Кнопка = имя университета, справа ➕ В сравнение."""
+    rows = []
+
+    for u in unis_page:
+        uid = (u.get("ID") or "").strip()
+        if not uid:
+            continue
+
+        name = u.get("Name", "Без названия")
+        short_label = name if len(name) <= 40 else name[:37] + "..."
+
+        btn_open = InlineKeyboardButton(
+            text=f"🎓 {short_label}",
+            callback_data=f"uni_open:{uid}:{page}",
+        )
+        btn_cmp = InlineKeyboardButton(
+            text="➕", callback_data=f"cmp_add:{uid}"
+        )
+        rows.append([btn_open, btn_cmp])
+
+    nav_row = []
+    if page > 0:
+        nav_row.append(InlineKeyboardButton(text="⬅️ Назад", callback_data="unis_prev"))
+    if page < total_pages - 1:
+        nav_row.append(InlineKeyboardButton(text="➡️ Далее", callback_data="unis_next"))
+    if nav_row:
+        rows.append(nav_row)
+
+    rows.append([InlineKeyboardButton(text="🏠 Меню", callback_data="menu")])
+
+    return InlineKeyboardMarkup(inline_keyboard=rows)(unis_page, page: int, total_pages: int) -> InlineKeyboardMarkup:
     """Компактная клавиатура: две кнопки в строке — Открыть и ➕ В сравнение."""
     rows = []
 
@@ -642,6 +673,32 @@ async def cb_unis_next(callback: CallbackQuery):
 
 
 @dp.callback_query(F.data.startswith("uni_open:"))
+async def cb_uni_open(callback: CallbackQuery):
+    data = callback.data or ""
+    parts = data.split(":")
+    if len(parts) < 3:
+        await callback.answer("Ошибка", show_alert=True)
+        return
+    uid = parts[1]
+    try:
+        page = int(parts[2])
+    except ValueError:
+        page = 0
+
+    uni = UNIS_BY_ID.get(uid)
+    if not uni:
+        await callback.answer("Университет не найден", show_alert=True)
+        return
+
+    text = format_uni_card_full(uni)
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="⬅️ Назад", callback_data=f"unis_goto:{page}")],
+            [InlineKeyboardButton(text="🏠 Меню", callback_data="menu")],
+        ]
+    )
+    await callback.answer()
+    await callback.message.answer(text, parse_mode="HTML", reply_markup=kb):"))
 async def cb_uni_open(callback: CallbackQuery):
     # callback.data format: uni_open:<uid>:<page>
     data = callback.data or ""
