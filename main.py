@@ -202,9 +202,13 @@ def describe_filters(filters: dict, total: int) -> str:
     if not parts:
         title = "🔎 <b>Все ВУЗы Казахстана</b>"
     else:
-        title = "🔎 <b>ВУЗы по фильтрам</b>\n" + "\n".join(parts)
+        title = "🔎 <b>ВУЗы по фильтрам</b>
+" + "
+".join(parts)
 
-    title += f"\n\nНайдено: <b>{total}</b>"
+    title += f"
+
+Найдено: <b>{total}</b>"
     return title
 
 
@@ -238,11 +242,13 @@ def format_uni_card_full(uni: dict) -> str:
         "🌍 <b>Международное сотрудничество</b>",
         international or "Нет данных.",
         "━━━━━━━━━━━━━━━━━━",
-        f"🔗 <b>Сайт:</b>\n{website}" if website else "🔗 Сайт не указан",
+        f"🔗 <b>Сайт:</b>
+{website}" if website else "🔗 Сайт не указан",
     ]
 
     res = [l for l in lines if l]
-    return "\n".join(res)
+    return "
+".join(res)
 
 
 def format_uni_short_line(uni: dict) -> str:
@@ -252,11 +258,13 @@ def format_uni_short_line(uni: dict) -> str:
     min_score = uni.get("MinScore", "")
 
     short_spec = specs.split(",")[0].strip() if specs else ""
-    line = f"🎓 <b>{name}</b>\n🏙 {city}"
+    line = f"🎓 <b>{name}</b>
+🏙 {city}"
     if str(min_score) != "":
         line += f" • 📊 {min_score}"
     if short_spec:
-        line += f"\n📚 {short_spec}"
+        line += f"
+📚 {short_spec}"
     return line
 
 
@@ -271,11 +279,12 @@ def make_unis_list_text(unis_page, filters, page: int, total_pages: int, total_c
     for u in unis_page:
         lines.append(format_uni_short_line(u))
         lines.append("")
-    return "\n".join(lines)
+    return "
+".join(lines)
 
 
 def make_unis_keyboard(unis_page, page: int, total_pages: int) -> InlineKeyboardMarkup:
-    """Компактная клавиатура: одна кнопка = один вуз."""
+    """Компактная клавиатура: две кнопки в строке — Открыть и ➕ В сравнение."""
     rows = []
 
     for u in unis_page:
@@ -284,14 +293,16 @@ def make_unis_keyboard(unis_page, page: int, total_pages: int) -> InlineKeyboard
             continue
 
         name = u.get("Name", "Без названия")
-        if len(name) > 40:
-            name = name[:37] + "..."
+        short_label = name if len(name) <= 30 else name[:27] + "..."
 
-        btn = InlineKeyboardButton(
-            text=f"🎓 {name}",
-            callback_data=f"uni:{uid}",
+        btn_open = InlineKeyboardButton(
+            text=f"🔍 {short_label}",
+            callback_data=f"uni_open:{uid}:{page}",
         )
-        rows.append([btn])
+        btn_cmp = InlineKeyboardButton(
+            text=f"➕ В сравнение", callback_data=f"cmp_add:{uid}"
+        )
+        rows.append([btn_open, btn_cmp])
 
     nav_row = []
     if page > 0:
@@ -374,7 +385,9 @@ async def send_unis_list(chat_id: int, user_id: int, page: int = None):
 
     all_unis = apply_filters(filters)
     if not all_unis:
-        text = describe_filters(filters, 0) + "\n\nНичего не найдено по таким условиям."
+        text = describe_filters(filters, 0) + "
+
+Ничего не найдено по таким условиям."
         kb = InlineKeyboardMarkup(
             inline_keyboard=[
                 [InlineKeyboardButton(text="🧹 Сбросить фильтры", callback_data="reset_filters")],
@@ -410,7 +423,9 @@ async def cmd_start(message: Message):
     # Убираем reply-клавиатуру, чтобы клиент перешёл на inline-интерфейс
     await message.answer("👋 Привет! Это DataHub ВУЗов Казахстана.", reply_markup=ReplyKeyboardRemove())
     await message.answer(
-        "Найди ВУЗ по городу, направлению, баллу или сравни несколько между собой.\n\nВыберите фильтр:",
+        "Найди ВУЗ по городу, направлению, баллу или сравни несколько между собой.
+
+Выберите фильтр:",
         reply_markup=main_inline_menu(),
         parse_mode="HTML",
     )
@@ -429,13 +444,22 @@ async def show_filters(message: Message):
 @dp.message(F.text == "Помощь")
 async def help_message(message: Message):
     await message.answer(
-        "ℹ <b>Как пользоваться ботом:</b>\n\n"
-        "• «Фильтры» — выбираешь город, специальность, можешь сбросить фильтры.\n"
-        "• Фильтры комбинируются: город + направление + минимальный балл.\n"
-        "• «⚖ Сравнение» — показывает ВУЗы, добавленные через «➕ В сравнение».\n"
-        "• «🎲 Случайный ВУЗ» — случайная рекомендация.\n"
-        "• «🔢 Поиск по баллу» — фильтр по минимальному баллу ЕНТ.\n"
-        "• «Таблица ВУЗов Excel» — ссылка на полную таблицу ВУЗов в Google Drive.\n\n"
+        "ℹ <b>Как пользоваться ботом:</b>
+
+"
+        "• «Фильтры» — выбираешь город, специальность, можешь сбросить фильтры.
+"
+        "• Фильтры комбинируются: город + направление + минимальный балл.
+"
+        "• «⚖ Сравнение» — показывает ВУЗы, добавленные через «➕ В сравнение».
+"
+        "• «🎲 Случайный ВУЗ» — случайная рекомендация.
+"
+        "• «🔢 Поиск по баллу» — фильтр по минимальному баллу ЕНТ.
+"
+        "• «Таблица ВУЗов Excel» — ссылка на полную таблицу ВУЗов в Google Drive.
+
+"
         "Можно также писать название города, ВУЗа или направления (например, «Алматы», «НУ», «IT").",
         parse_mode="HTML",
     )
@@ -444,7 +468,8 @@ async def help_message(message: Message):
 @dp.message(F.text == "Таблица ВУЗов Excel")
 async def excel_link(message: Message):
     await message.answer(
-        "📊 Полная таблица ВУЗов Казахстана в формате Excel находится здесь:\n"
+        "📊 Полная таблица ВУЗов Казахстана в формате Excel находится здесь:
+"
         "https://drive.google.com/drive/folders/1fjZvILeJXRLSkiL2zhaz_fcngD7nKkoU",
         parse_mode="HTML",
     )
@@ -456,7 +481,9 @@ async def random_uni(message: Message):
         await message.answer("База ВУЗов пустая.")
         return
     uni = choice(universities)
-    text = "🎲 Случайный ВУЗ:\n\n" + format_uni_card_full(uni)
+    text = "🎲 Случайный ВУЗ:
+
+" + format_uni_card_full(uni)
     await message.answer(text, parse_mode="HTML")
 
 
@@ -466,7 +493,9 @@ async def compare_button(message: Message):
     ids = compare_list.get(user_id, [])
     if not ids:
         await message.answer(
-            "Список сравнения пуст.\n\n"
+            "Список сравнения пуст.
+
+"
             "В списке ВУЗов нажимай «➕ В сравнение» в карточке ВУЗа, чтобы добавить.",
             parse_mode="HTML",
         )
@@ -612,6 +641,52 @@ async def cb_unis_next(callback: CallbackQuery):
     await send_unis_list(callback.message.chat.id, callback.from_user.id, page=new_page)
 
 
+@dp.callback_query(F.data.startswith("uni_open:"))
+async def cb_uni_open(callback: CallbackQuery):
+    # callback.data format: uni_open:<uid>:<page>
+    data = callback.data or ""
+    parts = data.split(":")
+    if len(parts) < 3:
+        await callback.answer("Ошибка", show_alert=True)
+        return
+    uid = parts[1]
+    try:
+        page = int(parts[2])
+    except ValueError:
+        page = 0
+
+    uni = UNIS_BY_ID.get(uid)
+    if not uni:
+        await callback.answer("Университет не найден", show_alert=True)
+        return
+
+    text = format_uni_card_full(uni)
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="➕ В сравнение", callback_data=f"cmp_add:{uid}"),
+             InlineKeyboardButton(text="⬅️ Назад", callback_data=f"unis_goto:{page}")],
+            [InlineKeyboardButton(text="🏠 Меню", callback_data="menu")],
+        ]
+    )
+    await callback.answer()
+    # отправляем карточку университета с inline-кнопками
+    await callback.message.answer(text, parse_mode="HTML", reply_markup=kb)
+
+
+@dp.callback_query(F.data.startswith("unis_goto:"))
+async def cb_unis_goto(callback: CallbackQuery):
+    data = callback.data or ""
+    try:
+        page = int(data.split(":")[1])
+    except Exception:
+        page = 0
+    st = get_state(callback.from_user.id)
+    st["page"] = page
+    await callback.answer()
+    await send_unis_list(callback.message.chat.id, callback.from_user.id, page=page)
+
+
+# старый обработчик uni: (оставляем на случай использования)
 @dp.callback_query(F.data.startswith("uni:"))
 async def cb_uni_card(callback: CallbackQuery):
     data = callback.data or ""
@@ -651,7 +726,9 @@ async def send_compare_view(chat_id: int, user_id: int):
     ids = compare_list.get(user_id, [])
     if not ids:
         text = (
-            "Список сравнения пуст.\n\n"
+            "Список сравнения пуст.
+
+"
             "Добавь ВУЗы через кнопку «➕ В сравнение» в карточке ВУЗа."
         )
         await bot.send_message(chat_id, text, reply_markup=main_inline_menu())
@@ -679,9 +756,16 @@ async def send_compare_view(chat_id: int, user_id: int):
             block_lines.append(f"📚 Направление: {short_spec}")
         if website:
             block_lines.append(f"🔗 {website}")
-        items.append("\n".join(block_lines))
+        items.append("
+".join(block_lines))
 
-    text = "⚖ <b>Сравнение ВУЗов</b>\n\n" + "\n\n━━━━━━━━━━━━\n\n".join(items)
+    text = "⚖ <b>Сравнение ВУЗов</b>
+
+" + "
+
+━━━━━━━━━━━━
+
+".join(items)
 
     kb = InlineKeyboardMarkup(
         inline_keyboard=[
@@ -781,7 +865,8 @@ async def text_handler(message: Message):
         lines.append(format_uni_short_line(u))
         lines.append("")
 
-    await message.answer("\n".join(lines), parse_mode="HTML")
+    await message.answer("
+".join(lines), parse_mode="HTML")
 
 
 async def main():
