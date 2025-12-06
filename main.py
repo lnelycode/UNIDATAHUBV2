@@ -55,7 +55,6 @@ def load_from_sqlite():
     global universities, UNIS_BY_ID, cities, specialties
 
     if not os.path.exists(DB_PATH):
-        # Создадим пустую структуру, если базы нет, чтобы бот не падал сразу
         logging.error(f"Файл базы данных {DB_PATH} не найден.")
         return
 
@@ -243,22 +242,10 @@ def format_uni_card_full(uni: dict) -> str:
     return "\n".join(res)
 
 
-def format_uni_short_line(uni: dict) -> str:
-    """Для текстового поиска (не кнопочного)."""
-    name = uni.get("Name", "Без названия")
-    city = uni.get("City", "Не указан")
-    min_score = uni.get("MinScore", "")
-    
-    line = f"🎓 <b>{name}</b>\n🏙 {city}"
-    if str(min_score) != "":
-        line += f" • 📊 {min_score}"
-    return line
-
-
 # --- ФУНКЦИИ ОТОБРАЖЕНИЯ СПИСКА (НОВЫЙ ДИЗАЙН) ---
 
 def make_unis_list_text(filters: dict, page: int, total_pages: int, total_count: int) -> str:
-    """Текст сообщения над списком кнопок."""
+    """Текст сообщения над списком кнопок. НЕ СОДЕРЖИТ ЦИКЛ ПЕРЕЧИСЛЕНИЯ ВУЗОВ!"""
     header = describe_filters(filters, total_count)
     text = (
         f"{header}\n\n"
@@ -269,15 +256,7 @@ def make_unis_list_text(filters: dict, page: int, total_pages: int, total_count:
 
 
 def make_unis_keyboard(unis_page, page: int, total_pages: int) -> InlineKeyboardMarkup:
-    """
-    Клавиатура:
-    [ ВУЗ 1 ]
-    [ ВУЗ 2 ]
-    ...
-    [ < Назад ] [ Далее > ]
-    [ Сравнить ] [ Сбросить ]
-    [ Меню ]
-    """
+    """Генерация клавиатуры в формате: [ВУЗ], [ВУЗ], [<-|->], [Сравнить|Сбросить], [Меню]"""
     rows = []
 
     # 1. Список ВУЗов (по одному в строке)
@@ -287,14 +266,13 @@ def make_unis_keyboard(unis_page, page: int, total_pages: int) -> InlineKeyboard
             continue
 
         name = u.get("Name", "Без названия")
-        # Сокращаем название для кнопки, если очень длинное
         label = f"🎓 {name}"
         if len(label) > 60:
             label = label[:57] + "..."
 
         btn = InlineKeyboardButton(
             text=label,
-            callback_data=f"uni_open:{uid}:{page}" # Передаем ID и номер текущей страницы
+            callback_data=f"uni_open:{uid}:{page}"
         )
         rows.append([btn])
 
@@ -320,13 +298,10 @@ def make_unis_keyboard(unis_page, page: int, total_pages: int) -> InlineKeyboard
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-# ================== ОТПРАВКА СПИСКА ==================
+# ================== ОТПРАВКА СПИСКА (УНИВЕРСАЛЬНАЯ ФУНКЦИЯ) ==================
 
-async def send_unis_list(message_or_call, user_id: int, page: int = None, edit: bool = False):
-    """
-    Универсальная функция отправки/обновления списка.
-    edit=True используется для пагинации и возврата "Назад".
-    """
+async def send_unis_list(message_or_call, user_id: int, page: int = None):
+    """Отправляет/обновляет список вузов."""
     st = get_state(user_id)
     filters = st["filters"]
     
@@ -337,7 +312,6 @@ async def send_unis_list(message_or_call, user_id: int, page: int = None, edit: 
 
     all_unis = apply_filters(filters)
     
-    # Если ничего не найдено
     if not all_unis:
         text = describe_filters(filters, 0) + "\n\nНичего не найдено по таким условиям."
         kb = InlineKeyboardMarkup(
@@ -347,16 +321,13 @@ async def send_unis_list(message_or_call, user_id: int, page: int = None, edit: 
             ]
         )
         
-        # Определяем объект сообщения
         if isinstance(message_or_call, CallbackQuery):
-            msg = message_or_call.message
-            await msg.edit_text(text, parse_mode="HTML", reply_markup=kb)
+            await message_or_call.message.edit_text(text, parse_mode="HTML", reply_markup=kb)
         else:
             await message_or_call.answer(" ", reply_markup=ReplyKeyboardRemove())
             await message_or_call.answer(text, parse_mode="HTML", reply_markup=kb)
         return
 
-    # Пагинация
     total_pages = max(1, ceil(len(all_unis) / UNIS_PER_PAGE))
     page = max(0, min(page, total_pages - 1))
     st["page"] = page
@@ -365,18 +336,18 @@ async def send_unis_list(message_or_call, user_id: int, page: int = None, edit: 
     end = start + UNIS_PER_PAGE
     unis_page = all_unis[start:end]
 
+    # Используем минимальный текст
     text = make_unis_list_text(filters, page, total_pages, len(all_unis))
     kb = make_unis_keyboard(unis_page, page, total_pages)
 
     if isinstance(message_or_call, CallbackQuery):
-        # Если вызвано из callback (кнопки), редактируем сообщение
+        # При листании/возврате назад редактируем сообщение
         try:
             await message_or_call.message.edit_text(text, parse_mode="HTML", reply_markup=kb)
         except TelegramBadRequest:
-            # Если текст не изменился (иногда бывает), игнорируем ошибку
-            pass
+            pass # Игнорируем ошибку "Message not modified"
     else:
-        # Если вызвано из обычного сообщения (поиск текста), отправляем новое
+        # При поиске отправляем новое сообщение
         await message_or_call.answer(" ", reply_markup=ReplyKeyboardRemove())
         await message_or_call.answer(text, parse_mode="HTML", reply_markup=kb)
 
@@ -433,7 +404,6 @@ async def random_uni(message: Message):
     uni = choice(universities)
     text = "🎲 <b>Случайный ВУЗ:</b>\n\n" + format_uni_card_full(uni)
     
-    # Кнопки для случайного вуза
     uid = uni["ID"]
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="➕ В сравнение", callback_data=f"cmp_add:{uid}")],
@@ -623,6 +593,7 @@ async def cb_unis_prev(callback: CallbackQuery):
     st = get_state(callback.from_user.id)
     new_page = max(0, st.get("page", 0) - 1)
     await callback.answer()
+    # Обратите внимание: send_unis_list теперь умеет редактировать сообщение
     await send_unis_list(callback, callback.from_user.id, page=new_page)
 
 
@@ -631,6 +602,7 @@ async def cb_unis_next(callback: CallbackQuery):
     st = get_state(callback.from_user.id)
     new_page = st.get("page", 0) + 1
     await callback.answer()
+    # Обратите внимание: send_unis_list теперь умеет редактировать сообщение
     await send_unis_list(callback, callback.from_user.id, page=new_page)
 
 
@@ -658,7 +630,7 @@ async def cb_uni_open(callback: CallbackQuery):
     text = format_uni_card_full(uni)
 
     # Клавиатура внутри карточки:
-    # [ В сравнение ] [ Назад к списку ]
+    # [ В сравнение ] [ Назад к списку (с номером страницы) ]
     # [ Меню ]
     kb = InlineKeyboardMarkup(
         inline_keyboard=[
@@ -671,7 +643,6 @@ async def cb_uni_open(callback: CallbackQuery):
     )
     
     await callback.answer()
-    # Edit text делает переход плавным
     await callback.message.edit_text(text, parse_mode="HTML", reply_markup=kb, disable_web_page_preview=True)
 
 
@@ -773,7 +744,6 @@ async def cb_cmp_add(callback: CallbackQuery):
 @dp.callback_query(F.data == "cmp_show")
 async def cb_cmp_show(callback: CallbackQuery):
     await callback.answer()
-    # Сравнение отправляем новым сообщением, так как оно большое
     await send_compare_view(callback.message.chat.id, callback.from_user.id)
 
 
@@ -805,7 +775,6 @@ async def text_handler(message: Message):
         st["page"] = 0
         st["await_score"] = False
 
-        # После ввода балла показываем список
         await send_unis_list(message, user_id, page=0)
         return
 
@@ -826,16 +795,11 @@ async def text_handler(message: Message):
         )
         return
 
-    # Если нашли, показываем первые 5 как список кнопок
-    # Но так как результаты поиска через текст не сохраняются в фильтр глобально в этом коде,
-    # мы покажем их просто текстом или временным списком.
-    # Чтобы не усложнять, покажем топ-5 текстом, как было, или кнопками.
-    # Реализуем показ КНОПКАМИ для найденных (одноразовая генерация)
-    
     limit_res = results[:5]
     text_msg = f"🔎 Результаты по запросу: <b>{txt}</b>"
     
     rows = []
+    # Отображаем найденные ВУЗы кнопками
     for u in limit_res:
         uid = u["ID"]
         name = u["Name"]
