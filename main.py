@@ -14,6 +14,7 @@ from aiogram.types import (
     KeyboardButton,
     InlineKeyboardMarkup,
     InlineKeyboardButton,
+    ReplyKeyboardRemove,
 )
 
 # ================== НАСТРОЙКИ ==================
@@ -124,6 +125,7 @@ def get_state(user_id: int):
 
 
 def main_reply_keyboard() -> ReplyKeyboardMarkup:
+    # Если вы хотите полностью убрать reply-клавиатуру — просто не используйте эту функцию.
     return ReplyKeyboardMarkup(
         resize_keyboard=True,
         keyboard=[
@@ -379,6 +381,8 @@ async def send_unis_list(chat_id: int, user_id: int, page: int = None):
                 [InlineKeyboardButton(text="🏠 Меню", callback_data="menu")],
             ]
         )
+        # Убираем reply-клавиатуру перед отправкой inline-меню
+        await bot.send_message(chat_id, " ", reply_markup=ReplyKeyboardRemove())
         await bot.send_message(chat_id, text, parse_mode="HTML", reply_markup=kb)
         return
 
@@ -393,6 +397,8 @@ async def send_unis_list(chat_id: int, user_id: int, page: int = None):
     text = make_unis_list_text(unis_page, filters, page, total_pages, len(all_unis))
     kb = make_unis_keyboard(unis_page, page, total_pages)
 
+    # Убираем reply-клавиатуру перед отправкой inline-меню (иначе пользователь увидит обе клавиатуры)
+    await bot.send_message(chat_id, " ", reply_markup=ReplyKeyboardRemove())
     await bot.send_message(chat_id, text, parse_mode="HTML", reply_markup=kb)
 
 
@@ -401,20 +407,19 @@ async def send_unis_list(chat_id: int, user_id: int, page: int = None):
 @dp.message(CommandStart())
 async def cmd_start(message: Message):
     get_state(message.from_user.id)
+    # Убираем reply-клавиатуру, чтобы клиент перешёл на inline-интерфейс
+    await message.answer("👋 Привет! Это DataHub ВУЗов Казахстана.", reply_markup=ReplyKeyboardRemove())
     await message.answer(
-        "👋 Привет! Это DataHub ВУЗов Казахстана.\n\n"
-        "Найди ВУЗ по городу, направлению, баллу или сравни несколько между собой.",
-        reply_markup=main_reply_keyboard(),
-        parse_mode="HTML",
-    )
-    await message.answer(
-        "Выберите фильтр:",
+        "Найди ВУЗ по городу, направлению, баллу или сравни несколько между собой.\n\nВыберите фильтр:",
         reply_markup=main_inline_menu(),
+        parse_mode="HTML",
     )
 
 
 @dp.message(F.text == "Фильтры")
 async def show_filters(message: Message):
+    # Перед показом inline-меню — удаляем reply-клавиатуру на всякий случай
+    await message.answer(" ", reply_markup=ReplyKeyboardRemove())
     await message.answer(
         "Выберите фильтр:",
         reply_markup=main_inline_menu(),
@@ -431,7 +436,7 @@ async def help_message(message: Message):
         "• «🎲 Случайный ВУЗ» — случайная рекомендация.\n"
         "• «🔢 Поиск по баллу» — фильтр по минимальному баллу ЕНТ.\n"
         "• «Таблица ВУЗов Excel» — ссылка на полную таблицу ВУЗов в Google Drive.\n\n"
-        "Можно также писать название города, ВУЗа или направления (например, «Алматы», «НУ», «IT»).",
+        "Можно также писать название города, ВУЗа или направления (например, «Алматы», «НУ», «IT").",
         parse_mode="HTML",
     )
 
@@ -482,6 +487,8 @@ async def ask_score(message: Message):
 @dp.callback_query(F.data == "menu")
 async def cb_menu(callback: CallbackQuery):
     await callback.answer()
+    # удаляем reply-клавиатуру на всякий случай
+    await callback.message.answer(" ", reply_markup=ReplyKeyboardRemove())
     await callback.message.answer(
         "Выберите фильтр:",
         reply_markup=main_inline_menu(),
@@ -494,6 +501,8 @@ async def cb_reset_filters(callback: CallbackQuery):
     st["filters"] = {"city": None, "spec": None, "score": None}
     st["page"] = 0
     await callback.answer("Фильтры сброшены")
+    # удаляем reply-клавиатуру и показываем inline-меню
+    await callback.message.answer(" ", reply_markup=ReplyKeyboardRemove())
     await callback.message.answer(
         "Фильтры сброшены. Показаны все ВУЗы.",
         reply_markup=main_inline_menu(),
@@ -512,6 +521,8 @@ async def cb_show_all(callback: CallbackQuery):
 async def cb_filter_cities(callback: CallbackQuery):
     await callback.answer()
     kb = make_cities_keyboard(page=0)
+    # удаляем reply-клавиатуру перед показом inline списка
+    await callback.message.answer(" ", reply_markup=ReplyKeyboardRemove())
     await callback.message.answer("📍 Выберите город:", reply_markup=kb)
 
 
@@ -549,6 +560,7 @@ async def cb_city_select(callback: CallbackQuery):
 async def cb_filter_specs(callback: CallbackQuery):
     await callback.answer()
     kb = make_specs_keyboard(page=0)
+    await callback.message.answer(" ", reply_markup=ReplyKeyboardRemove())
     await callback.message.answer("📚 Выберите специальность:", reply_markup=kb)
 
 
@@ -682,6 +694,8 @@ async def send_compare_view(chat_id: int, user_id: int):
         ]
     )
 
+    # Убираем reply-клавиатуру перед отправкой inline-меню
+    await bot.send_message(chat_id, " ", reply_markup=ReplyKeyboardRemove())
     await bot.send_message(chat_id, text, parse_mode="HTML", reply_markup=kb)
 
 
