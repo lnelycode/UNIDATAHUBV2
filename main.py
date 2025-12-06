@@ -21,6 +21,7 @@ from aiogram.exceptions import TelegramBadRequest
 # ================== НАСТРОЙКИ ==================
 
 # Убедитесь, что токен указан верно или есть в переменных окружения
+# ВНИМАНИЕ: Замените "ВАШ_ТОКЕН_ЗДЕСЬ" на ваш реальный токен!
 BOT_TOKEN = os.getenv("BOT_TOKEN", "ВАШ_ТОКЕН_ЗДЕСЬ") 
 
 # Имя файла базы данных
@@ -55,7 +56,7 @@ def load_from_sqlite():
     global universities, UNIS_BY_ID, cities, specialties
 
     if not os.path.exists(DB_PATH):
-        logging.error(f"Файл базы данных {DB_PATH} не найден.")
+        logging.error(f"Файл базы данных {DB_PATH} не найден. Проверьте путь.")
         return
 
     conn = sqlite3.connect(DB_PATH)
@@ -65,7 +66,7 @@ def load_from_sqlite():
         cur.execute("SELECT * FROM universities")
         rows = cur.fetchall()
     except sqlite3.OperationalError:
-        logging.error("Таблица universities не найдена в БД.")
+        logging.error("Таблица universities не найдена в БД. Убедитесь, что таблица существует.")
         rows = []
     finally:
         conn.close()
@@ -109,7 +110,6 @@ def load_from_sqlite():
     specialties[:] = sorted(list(spec_set))
 
     logging.info(f"Загружено вузов из БД: {len(universities)}")
-    logging.info(f"Городов: {len(cities)}, специальностей: {len(specialties)}")
 
 
 load_from_sqlite()
@@ -134,6 +134,7 @@ def get_state(user_id: int):
 
 
 def main_inline_menu() -> InlineKeyboardMarkup:
+    """Генерирует главное инлайн-меню."""
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [InlineKeyboardButton(text="📍 Города", callback_data="filter_cities")],
@@ -183,6 +184,7 @@ def apply_filters(filters: dict):
 
 
 def describe_filters(filters: dict, total: int) -> str:
+    """Форматирует описание текущих фильтров."""
     parts = []
 
     city = filters.get("city")
@@ -206,6 +208,7 @@ def describe_filters(filters: dict, total: int) -> str:
 
 
 def format_uni_card_full(uni: dict) -> str:
+    """Полное форматирование карточки ВУЗа."""
     name = uni.get("Name", "Без названия")
     city = uni.get("City", "Не указан")
     specs = uni.get("Specialties", "")
@@ -242,10 +245,10 @@ def format_uni_card_full(uni: dict) -> str:
     return "\n".join(res)
 
 
-# --- ФУНКЦИИ ОТОБРАЖЕНИЯ СПИСКА (НОВЫЙ ДИЗАЙН) ---
+# --- ФУНКЦИИ ОТОБРАЖЕНИЯ СПИСКА ---
 
 def make_unis_list_text(filters: dict, page: int, total_pages: int, total_count: int) -> str:
-    """Текст сообщения над списком кнопок. НЕ СОДЕРЖИТ ЦИКЛ ПЕРЕЧИСЛЕНИЯ ВУЗОВ!"""
+    """Текст сообщения над списком кнопок (ТОЛЬКО ЗАГОЛОВОК)."""
     header = describe_filters(filters, total_count)
     text = (
         f"{header}\n\n"
@@ -256,10 +259,10 @@ def make_unis_list_text(filters: dict, page: int, total_pages: int, total_count:
 
 
 def make_unis_keyboard(unis_page, page: int, total_pages: int) -> InlineKeyboardMarkup:
-    """Генерация клавиатуры в формате: [ВУЗ], [ВУЗ], [<-|->], [Сравнить|Сбросить], [Меню]"""
+    """Генерация клавиатуры со списком ВУЗов."""
     rows = []
 
-    # 1. Список ВУЗов (по одному в строке)
+    # 1. Список ВУЗов
     for u in unis_page:
         uid = (u.get("ID") or "").strip()
         if not uid:
@@ -336,7 +339,6 @@ async def send_unis_list(message_or_call, user_id: int, page: int = None):
     end = start + UNIS_PER_PAGE
     unis_page = all_unis[start:end]
 
-    # Используем минимальный текст
     text = make_unis_list_text(filters, page, total_pages, len(all_unis))
     kb = make_unis_keyboard(unis_page, page, total_pages)
 
@@ -345,7 +347,7 @@ async def send_unis_list(message_or_call, user_id: int, page: int = None):
         try:
             await message_or_call.message.edit_text(text, parse_mode="HTML", reply_markup=kb)
         except TelegramBadRequest:
-            pass # Игнорируем ошибку "Message not modified"
+            pass
     else:
         # При поиске отправляем новое сообщение
         await message_or_call.answer(" ", reply_markup=ReplyKeyboardRemove())
@@ -357,6 +359,7 @@ async def send_unis_list(message_or_call, user_id: int, page: int = None):
 @dp.message(CommandStart())
 async def cmd_start(message: Message):
     get_state(message.from_user.id)
+    # Удаляем Reply-клавиатуру и показываем инлайн-меню
     await message.answer("👋 Привет! Это DataHub ВУЗов Казахстана.", reply_markup=ReplyKeyboardRemove())
     await message.answer(
         "Найди ВУЗ по городу, направлению, баллу или сравни несколько между собой.\n\nВыберите фильтр:",
@@ -367,6 +370,7 @@ async def cmd_start(message: Message):
 
 @dp.message(F.text == "Фильтры")
 async def show_filters(message: Message):
+    # ! ИСПРАВЛЕНИЕ: Гарантируем, что Reply-клавиатура убирается
     await message.answer(" ", reply_markup=ReplyKeyboardRemove())
     await message.answer(
         "Выберите фильтр:",
@@ -376,13 +380,15 @@ async def show_filters(message: Message):
 
 @dp.message(F.text == "Помощь")
 async def help_message(message: Message):
+    # ! ИСПРАВЛЕНИЕ: Гарантируем, что Reply-клавиатура убирается
+    await message.answer(" ", reply_markup=ReplyKeyboardRemove())
     await message.answer(
         "ℹ <b>Как пользоваться ботом:</b>\n\n"
-        "• «Фильтры» — выбираешь город, специальность.\n"
-        "• «⚖ Сравнение» — сравни до 3-х выбранных ВУЗов.\n"
-        "• «🎲 Случайный ВУЗ» — рекомендация наугад.\n"
-        "• «🔢 Поиск по баллу» — фильтр по ЕНТ.\n\n"
-        "Можно также писать название города или ВУЗа в чат.",
+        "• Фильтры — выбираешь город, специальность.\n"
+        "• Сравнение — сравни до 3-х ВУЗов.\n"
+        "• Случайный ВУЗ — рекомендация наугад.\n"
+        "• Поиск по баллу — фильтр по ЕНТ.\n\n"
+        "Можно также писать название города или ВУЗа в чат. Для навигации используйте 🏠 Меню.",
         parse_mode="HTML",
     )
 
@@ -446,8 +452,9 @@ async def cb_reset_filters(callback: CallbackQuery):
     st["filters"] = {"city": None, "spec": None, "score": None}
     st["page"] = 0
     await callback.answer("Фильтры сброшены")
+    # Возвращаемся в главное меню после сброса
     await callback.message.edit_text(
-        "✅ Фильтры сброшены. Показаны все ВУЗы.",
+        "✅ Фильтры сброшены. Выберите действие:",
         reply_markup=main_inline_menu(),
     )
 
@@ -502,6 +509,7 @@ async def cb_cities_page(callback: CallbackQuery):
         page = 0
     await callback.answer()
     kb = make_cities_keyboard(page)
+    # ! ИСПРАВЛЕНИЕ: Используем edit_text
     await callback.message.edit_text("📍 Выберите город:", reply_markup=kb)
 
 
@@ -565,6 +573,7 @@ async def cb_specs_page(callback: CallbackQuery):
         page = 0
     await callback.answer()
     kb = make_specs_keyboard(page)
+    # ! ИСПРАВЛЕНИЕ: Используем edit_text
     await callback.message.edit_text("📚 Выберите специальность:", reply_markup=kb)
 
 
@@ -593,7 +602,6 @@ async def cb_unis_prev(callback: CallbackQuery):
     st = get_state(callback.from_user.id)
     new_page = max(0, st.get("page", 0) - 1)
     await callback.answer()
-    # Обратите внимание: send_unis_list теперь умеет редактировать сообщение
     await send_unis_list(callback, callback.from_user.id, page=new_page)
 
 
@@ -602,11 +610,10 @@ async def cb_unis_next(callback: CallbackQuery):
     st = get_state(callback.from_user.id)
     new_page = st.get("page", 0) + 1
     await callback.answer()
-    # Обратите внимание: send_unis_list теперь умеет редактировать сообщение
     await send_unis_list(callback, callback.from_user.id, page=new_page)
 
 
-# --- ОТКРЫТИЕ КАРТОЧКИ ВУЗА (НАЖАТИЕ НА КНОПКУ В СПИСКЕ) ---
+# --- ОТКРЫТИЕ КАРТОЧКИ ВУЗА ---
 
 @dp.callback_query(F.data.startswith("uni_open:"))
 async def cb_uni_open(callback: CallbackQuery):
@@ -629,9 +636,6 @@ async def cb_uni_open(callback: CallbackQuery):
 
     text = format_uni_card_full(uni)
 
-    # Клавиатура внутри карточки:
-    # [ В сравнение ] [ Назад к списку (с номером страницы) ]
-    # [ Меню ]
     kb = InlineKeyboardMarkup(
         inline_keyboard=[
             [
@@ -658,7 +662,6 @@ async def cb_unis_goto(callback: CallbackQuery):
     st["page"] = page
     
     await callback.answer()
-    # Возвращаемся к списку (редактируем сообщение обратно в список)
     await send_unis_list(callback, callback.from_user.id, page=page)
 
 
@@ -677,10 +680,14 @@ def add_to_compare(user_id: int, uni_id: str):
 
 async def send_compare_view(chat_id: int, user_id: int):
     ids = compare_list.get(user_id, [])
+    
+    # ! ИСПРАВЛЕНИЕ: Удаляем Reply-клавиатуру перед отправкой сравнения
+    await bot.send_message(chat_id, " ", reply_markup=ReplyKeyboardRemove())
+
     if not ids:
         text = "Список сравнения пуст.\nДобавь ВУЗы через кнопку «➕ В сравнение»."
         kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="🏠 Меню", callback_data="menu")]])
-        await bot.send_message(chat_id, text, reply_markup=kb)
+        await bot.send_message(chat_id, text, parse_mode="HTML", reply_markup=kb)
         return
 
     items = []
@@ -716,7 +723,6 @@ async def send_compare_view(chat_id: int, user_id: int):
         ]
     )
     
-    await bot.send_message(chat_id, " ", reply_markup=ReplyKeyboardRemove())
     await bot.send_message(chat_id, text, parse_mode="HTML", reply_markup=kb, disable_web_page_preview=True)
 
 
@@ -775,6 +781,7 @@ async def text_handler(message: Message):
         st["page"] = 0
         st["await_score"] = False
 
+        # После ввода балла показываем список с фильтром
         await send_unis_list(message, user_id, page=0)
         return
 
@@ -789,9 +796,12 @@ async def text_handler(message: Message):
             results.append(u)
 
     if not results:
+        # ! ИСПРАВЛЕНИЕ: Гарантируем, что Reply-клавиатура убирается, если была
+        await message.answer(" ", reply_markup=ReplyKeyboardRemove())
         await message.answer(
             f"Ничего не найдено по запросу: <b>{txt}</b>",
             parse_mode="HTML",
+            reply_markup=main_inline_menu() # Предлагаем вернуться в меню
         )
         return
 
@@ -803,12 +813,15 @@ async def text_handler(message: Message):
     for u in limit_res:
         uid = u["ID"]
         name = u["Name"]
-        btn = InlineKeyboardButton(text=f"🎓 {name}", callback_data=f"uni_open:{uid}:0")
+        # Используем uni_open:uid:0, так как это не пагинированный список, а поиск
+        btn = InlineKeyboardButton(text=f"🎓 {name}", callback_data=f"uni_open:{uid}:0") 
         rows.append([btn])
     
     rows.append([InlineKeyboardButton(text="🏠 Меню", callback_data="menu")])
     kb = InlineKeyboardMarkup(inline_keyboard=rows)
     
+    # ! ИСПРАВЛЕНИЕ: Удаляем Reply-клавиатуру перед отправкой
+    await message.answer(" ", reply_markup=ReplyKeyboardRemove())
     await message.answer(text_msg, parse_mode="HTML", reply_markup=kb)
 
 
