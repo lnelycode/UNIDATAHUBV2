@@ -693,7 +693,10 @@ async def cb_uni_open(callback: CallbackQuery):
     text = format_uni_card_full(uni)
     kb = InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="⬅️ Назад", callback_data=f"unis_goto:{page}")],
+            [
+                InlineKeyboardButton(text="➕ В сравнение", callback_data=f"cmp_add:{uid}"),
+                InlineKeyboardButton(text="⬅️ Назад", callback_data=f"unis_goto:{page}"),
+            ],
             [InlineKeyboardButton(text="🏠 Меню", callback_data="menu")],
         ]
     )
