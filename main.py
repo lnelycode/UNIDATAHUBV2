@@ -232,11 +232,14 @@ def format_uni_card_full(uni: Dict[str, Any]) -> str:
 # ----------------- Клавиатуры -----------------
 
 def main_inline_menu() -> InlineKeyboardMarkup:
+    # Главное инлайн-меню — добавлена кнопка к общей информации по базе внизу
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="📍 Города", callback_data="filter_cities")],
         [InlineKeyboardButton(text="📚 Специальности", callback_data="filter_specs")],
         [InlineKeyboardButton(text="🔎 Показать ВУЗы", callback_data="show_all")],
         [InlineKeyboardButton(text="🧹 Сбросить фильтры", callback_data="reset_filters")],
+        # Кнопка, которую вы просили — открывает папку с полными описаниями
+        [InlineKeyboardButton(text="📄 Полное описание ВУЗов", callback_data="full_description")],
     ])
 
 
@@ -456,6 +459,23 @@ async def cb_show_all(callback: CallbackQuery) -> None:
     st = get_state(callback.from_user.id)
     st["page"] = 0
     await send_unis_list(callback, callback.from_user.id, page=0)
+
+
+# --- Обработчик: Полные описания (ссылка на Google Drive) ---
+@dp.callback_query(F.data == "full_description")
+async def cb_full_description(callback: CallbackQuery) -> None:
+    """Отправляет пользователю ссылку на папку с полными описаниями вузов."""
+    await callback.answer()
+    text = (
+        "📄 <b>Полное описание вузов:</b>
+"
+        "https://drive.google.com/drive/folders/1fjZvILeJXRLSkiL2zhaz_fcngD7nKkoU"
+    )
+    try:
+        # Пытаемся отредактировать текущее сообщение (если это удобно), иначе отправляем новое
+        await callback.message.edit_text(text, parse_mode="HTML")
+    except TelegramBadRequest:
+        await bot.send_message(callback.message.chat.id, text, parse_mode="HTML")
 
 
 # --- Города ---
